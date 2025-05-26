@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دستیار هوشمند</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.3/purify.min.js"></script>
+</head>
+<body>
+    <div id="username-modal" class="modal active">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>پشتیبانی آنلاین</h2>
+            </div>
+            <form class="modal-form" onsubmit="event.preventDefault(); startChat();">
+                <input type="text" id="username" placeholder="لطفاً نام خود را وارد کنید" autocomplete="off">
+                <button type="submit">شروع گفتگو</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="bug-report-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>گزارش مشکل</h2>
+            </div>
+            <form class="modal-form" onsubmit="event.preventDefault(); submitBugReport();">
+                <input type="text" id="bug-title" placeholder="عنوان مشکل" autocomplete="off">
+                <textarea id="bug-description" placeholder="توضیحات مشکل" rows="4"></textarea>
+                <button type="submit">ارسال گزارش</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="chat-container" style="display: none;">
+        <div class="chat-header">
+            <h1>پشتیبانی آنلاین</h1>
+            <i class="fas fa-bug bug-report-icon" onclick="openBugReportModal()"></i>
+        </div>
+        
+        <div class="chat-box">
+            <div id="messages" class="messages"></div>
+            
+            <div class="input-area">
+                <form id="message-form" onsubmit="return false;">
+                    <input type="text" id="message-input" placeholder="پیام خود را بنویسید..." autocomplete="off">
+                    <button type="button" onclick="sendMessage()">ارسال</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let username = '';
+        const siteId = '{{ site_id }}';
+
+        function startChat() {
+            username = document.getElementById('username').value.trim();
+            if (username) {
+                const modal = document.getElementById('username-modal');
+                modal.classList.remove('active');
+                
+                const chatContainer = document.querySelector('.chat-container');
+                chatContainer.style.display = 'flex';
+                
+                document.getElementById('message-input').focus();
+                
+                setTimeout(() => {
+                    addMessage('assistant', `${username} عزیز، منتظر کمک کردن به شما هستیم!`);
+                }, 300);
+            }
+        }
+
+        function openBugReportModal() {
+            const modal = document.getElementById('bug-report-modal');
+            modal.classList.add('active');
+        }
+
+        function submitBugReport() {
+            const title = document.getElementById('bug-title').value.trim();
+            const description = document.getElementById('bug-description').value.trim();
+            
+            if (title && description) {
+                fetch('/api/report-bug', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title: title,
+                        description: description,
+                        username: username,
+                        site_id: siteId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('گزارش شما با موفقیت ارسال شد.');
+                        document.getElementById('bug-report-modal').classList.remove('active');
+                        document.getElementById('bug-title').value = '';
+                        document.getElementById('bug-description').value = '';
+                    } else {
+                        alert('خطا در ارسال گزارش. لطفاً دوباره تلاش کنید.');
+                    }
+                })
+                .catch(error => {
+                    alert('خطا در ارتباط با سرور. لطفاً دوباره تلاش کنید.');
+                });
+            }
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('message-input');
+            const message = messageInput.value.trim();
+            
+            if (message && username) {
+                addMessage('user', message);
+                messageInput.value = '';
+
+                const loadingMessage = addMessage('assistant', '<div class="loading-dots"><span></span><span></span><span></span></div>');
+                
+                fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        site_id: siteId,
+                        message: message,
+                        username: username
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    loadingMessage.remove();
+                    
+                    if (data.status === 'success') {
+                        const formattedResponse = data.response
+                            .replace(/\n/g, '<br>')
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                            .replace(/`(.*?)`/g, '<code>$1</code>');
+                        const safeContent = DOMPurify.sanitize(formattedResponse);
+                        addMessage('assistant', safeContent);
+
+                    } else {
+                        addMessage('error', 'خطا در دریافت پاسخ');
+                    }
+                })
+                .catch(error => {
+                    loadingMessage.remove();
+                    addMessage('error', 'خطا در ارتباط با سرور');
+                    console.error('Error:', error);
+                });
+            }
+        }
+
+        function addMessage(role, content) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+            
+            messageDiv.innerHTML = content;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return messageDiv;
+        }
+
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('active');
+                }
+            });
+        });
+
+        document.getElementById('message-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        document.getElementById('message-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                sendMessage();
+                return false;
+            }
+        });
+    </script>
+</body>
+</html>
