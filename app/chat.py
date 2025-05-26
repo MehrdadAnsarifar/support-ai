@@ -11,7 +11,7 @@ class ChatManager:
         
     def __init__(self):
         self.client = Client()
-        self.model = "gpt-4o-mini"
+        self.model = "gpt-3.5-turbo"
 
         # Define and inject system prompt at init time
         self.system_prompt = (
