@@ -11,7 +11,7 @@ class ChatManager:
         
     def __init__(self):
         self.client = Client()
-        self.model = "gpt-4o-mini"
+        self.model = "gpt-4"
 
         # Define and inject system prompt at init time
         self.system_prompt = """شما یک دستیار پشتیبانی فنی آزمایشی هستید که به عنوان نمونه کار ساخته شده‌اید. قوانین زیر باید بدون استثناء رعایت شوند:
